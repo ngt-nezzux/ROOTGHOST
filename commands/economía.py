@@ -410,11 +410,47 @@ class Economia(commands.Cog):
             ephemeral=True,
         )
 
-    @app_commands.command(name="eco-richest", description="[ADMIN] Consulta las cuentas más ricas.")
+    
+    @app_commands.command(
+        name="eco-richest",
+        description="[ADMIN] Consulta las cuentas más ricas."
+    )
     async def eco_richest(self, interaction: discord.Interaction):
         if not await self._admin_check(interaction):
             return
-        await self.leaderboard(interaction)
+
+        async with self.lock:
+            data = self._load()
+            users = sorted(
+                data["users"].items(),
+                key=lambda item: (
+                    item[1].get("balance", 0)
+                    + item[1].get("bank", 0)
+                ),
+                reverse=True,
+            )[:10]
+
+        lines = []
+        for position, (user_id, account) in enumerate(users, start=1):
+            user = self.bot.get_user(int(user_id))
+            name = (
+                discord.utils.escape_markdown(user.display_name)
+                if user
+                else f"Usuario {user_id}"
+            )
+            total = account.get("balance", 0) + account.get("bank", 0)
+            lines.append(
+                f"**{position}.** {name} — `{total:,} {MONEDA}`"
+            )
+
+        await interaction.response.send_message(
+            embed=self._embed(
+                "RANKING PRIVADO DE ECONOMÍA",
+                "\n".join(lines) if lines else "No hay cuentas registradas."
+            ),
+            ephemeral=True,
+        )
+
 
     @app_commands.command(name="economy-help", description="Lista los comandos de economía.")
     async def economy_help(self, interaction: discord.Interaction):
