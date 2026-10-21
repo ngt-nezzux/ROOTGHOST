@@ -1,14 +1,10 @@
 
-cd ~/ROOTGHOST
-mkdir -p commands
-
-cat > commands/poll_results.py <<'PY'
 import discord
 from discord import app_commands
 from discord.ext import commands
 
 
-EMOJIS = ["1️⃣", "2️⃣", "3️⃣", "4️⃣"]
+EMOJIS_ENCUESTA = ["1️⃣", "2️⃣", "3️⃣", "4️⃣"]
 
 
 class PollResults(commands.Cog):
@@ -17,104 +13,120 @@ class PollResults(commands.Cog):
 
     @app_commands.command(
         name="poll-results",
-        description="Consultar los resultados de una encuesta."
+        description="Consultar los resultados de una encuesta de ROOTGHOST."
     )
     @app_commands.guild_only()
     @app_commands.describe(
+        canal="Canal donde está publicada la encuesta.",
         mensaje_id="ID del mensaje de la encuesta."
     )
+    @app_commands.checks.has_permissions(manage_messages=True)
     async def poll_results(
         self,
         interaction: discord.Interaction,
+        canal: discord.TextChannel,
         mensaje_id: str
     ):
         if not mensaje_id.isdigit():
-            return await interaction.response.send_message(
-                "El ID del mensaje debe contener solo números.",
+            await interaction.response.send_message(
+                "❌ El ID del mensaje debe contener solo números.",
                 ephemeral=True
             )
+            return
 
-        if not interaction.channel:
-            return await interaction.response.send_message(
-                "No pude identificar el canal.",
+        if canal.guild.id != interaction.guild_id:
+            await interaction.response.send_message(
+                "❌ El canal debe pertenecer a este servidor.",
                 ephemeral=True
             )
+            return
+
+        await interaction.response.defer(ephemeral=True, thinking=True)
 
         try:
-            message = await interaction.channel.fetch_message(
-                int(mensaje_id)
-            )
+            mensaje = await canal.fetch_message(int(mensaje_id))
         except discord.NotFound:
-            return await interaction.response.send_message(
-                "No encontré ese mensaje en este canal.",
+            await interaction.followup.send(
+                "❌ No encontré ese mensaje en el canal indicado.",
                 ephemeral=True
             )
+            return
         except discord.Forbidden:
-            return await interaction.response.send_message(
-                "No tengo permiso para leer el mensaje.",
+            await interaction.followup.send(
+                "❌ No tengo permisos para leer ese mensaje. "
+                "Revisá Ver canal y Leer historial de mensajes.",
                 ephemeral=True
             )
+            return
         except discord.HTTPException:
-            return await interaction.response.send_message(
-                "No pude consultar el mensaje. Intentá nuevamente.",
+            await interaction.followup.send(
+                "❌ Discord no permitió consultar el mensaje. "
+                "Intentá nuevamente.",
                 ephemeral=True
             )
+            return
 
-        if not message.embeds:
-            return await interaction.response.send_message(
-                "Ese mensaje no contiene un embed de encuesta.",
+        if not mensaje.embeds:
+            await interaction.followup.send(
+                "❌ Ese mensaje no contiene una encuesta de ROOTGHOST.",
                 ephemeral=True
             )
+            return
 
-        embed_original = message.embeds[0]
+        encuesta = mensaje.embeds[0]
 
-        if not embed_original.title or "COMMUNITY POLL" not in embed_original.title:
-            return await interaction.response.send_message(
-                "Ese mensaje no parece ser una encuesta de ROOTGHOST.",
+        if encuesta.title != "ROOTGHOST // COMMUNITY POLL":
+            await interaction.followup.send(
+                "❌ El mensaje no parece ser una encuesta creada "
+                "con el comando /poll de ROOTGHOST.",
                 ephemeral=True
             )
+            return
 
-        resultado = discord.Embed(
+        resultados = discord.Embed(
             title="ROOTGHOST // POLL RESULTS",
-            description=embed_original.description or "Encuesta",
-            color=0x5865F2
+            description=encuesta.description or "Resultados de la encuesta",
+            color=0x5865F2,
+            timestamp=discord.utils.utcnow()
         )
 
         total_votos = 0
 
-        for emoji in EMOJIS:
-            reaccion = discord.utils.get(
-                message.reactions,
-                emoji=emoji
-            )
+        for emoji in EMOJIS_ENCUESTA:
+            reaccion = discord.utils.get(mensaje.reactions, emoji=emoji)
 
             if reaccion is None:
                 continue
 
-            votos = max(0, reaccion.count - (1 if reaccion.me else 0))
+            # Excluir la reacción del propio bot del total.
+            votos = max(0, reaccion.count - int(reaccion.me))
             total_votos += votos
 
             opcion = next(
                 (
                     campo.value
-                    for campo in embed_original.fields
+                    for campo in encuesta.fields
                     if campo.name.startswith(emoji)
                 ),
-                "Opción"
+                "Opción no identificada"
             )
 
-            resultado.add_field(
+            resultados.add_field(
                 name=f"{emoji} {opcion[:200]}",
-                value=f"**{votos}** voto(s)",
+                value=f"Votos registrados: **{votos}**",
                 inline=False
             )
 
-        resultado.set_footer(
-            text=f"Total de votos registrados: {total_votos}"
+        resultados.add_field(
+            name="Total de votos",
+            value=f"**{total_votos}**",
+            inline=False
         )
 
-        await interaction.response.send_message(
-            embed=resultado,
+        resultados.set_footer(text="ROOTGHOST SECURITY SYSTEM")
+
+        await interaction.followup.send(
+            embed=resultados,
             ephemeral=True,
             allowed_mentions=discord.AllowedMentions.none()
         )
@@ -122,6 +134,3 @@ class PollResults(commands.Cog):
 
 async def setup(bot: commands.Bot):
     await bot.add_cog(PollResults(bot))
-PY
-
-python -m py_compile commands/poll_results.py
