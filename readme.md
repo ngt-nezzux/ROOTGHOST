@@ -1,4 +1,4 @@
-👻 ROOTGHOST — Discord Bot
+ROOTGHOST — Discord Bot
 
 «Security • Moderation • Automation • Community»
 
