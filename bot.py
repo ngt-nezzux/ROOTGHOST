@@ -35,7 +35,11 @@ class RootGhost(commands.Bot):
                 print(f"[ROOTGHOST] Error en {file.stem}: {error}")
 
         synced = await self.tree.sync()
-        print(f"[ROOTGHOST] {len(synced)} comandos sincronizados")
+print(f"[ROOTGHOST] {len(synced)} comandos sincronizados")
+
+for comando in synced:
+    if comando.name.startswith("ia"):
+        print(f"[ROOTGHOST] Comando IA registrado: /{comando.name}")
 
     async def on_ready(self):
         print(f"[ROOTGHOST] Conectado como {self.user}")
