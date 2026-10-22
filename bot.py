@@ -1,75 +1,137 @@
-
 import os
-import logging
 from pathlib import Path
 
 import discord
-from discord import app_commands
 from discord.ext import commands
 
-TOKEN = os.getenv("DISCORD_TOKEN")
-logging.basicConfig(level=logging.INFO)
+
+# ==========================================
+# ROOTGHOST // CONFIGURACIÓN PRINCIPAL
+# ==========================================
+
+BASE_DIR = Path(__file__).resolve().parent
+COMMANDS_DIR = BASE_DIR / "commands"
 
 
 class RootGhost(commands.Bot):
+
     def __init__(self):
         intents = discord.Intents.default()
+        intents.members = True
+        intents.message_content = True
 
         super().__init__(
             command_prefix="!",
             intents=intents
         )
 
-    async def setup_hook(self):
-        commands_dir = Path(__file__).parent / "commands"
-        commands_dir.mkdir(exist_ok=True)
+    # ======================================
+    # CARGA Y SINCRONIZACIÓN DE COMANDOS
+    # ======================================
 
-        for file in commands_dir.glob("*.py"):
+    async def setup_hook(self):
+        COMMANDS_DIR.mkdir(parents=True, exist_ok=True)
+
+        print("[ROOTGHOST] Iniciando carga de comandos...")
+
+        # Cargar automáticamente las extensiones
+        for file in sorted(COMMANDS_DIR.glob("*.py")):
             if file.name.startswith("_"):
                 continue
 
+            extension = f"commands.{file.stem}"
+
             try:
-                await self.load_extension(f"commands.{file.stem}")
+                await self.load_extension(extension)
                 print(f"[ROOTGHOST] Cargado: {file.stem}")
+
             except Exception as error:
-                print(f"[ROOTGHOST] Error en {file.stem}: {error}")
+                print(
+                    f"[ROOTGHOST] Error en "
+                    f"{file.stem}: {type(error).__name__}: {error}"
+                )
 
-        synced = await self.tree.sync()
-print(f"[ROOTGHOST] {len(synced)} comandos sincronizados")
+        # Revisar los comandos que están en el árbol local
+        print("[ROOTGHOST] Revisando comandos IA...")
 
-for comando in synced:
-    if comando.name.startswith("ia"):
-        print(f"[ROOTGHOST] Comando IA registrado: /{comando.name}")
+        comandos_locales = self.tree.get_commands()
+        encontrados_locales = [
+            comando.name
+            for comando in comandos_locales
+            if comando.name.startswith("ia")
+        ]
+
+        if encontrados_locales:
+            for nombre in encontrados_locales:
+                print(
+                    f"[ROOTGHOST] Encontrado en el árbol: "
+                    f"/{nombre}"
+                )
+        else:
+            print(
+                "[ROOTGHOST] AVISO: no se encontraron "
+                "comandos IA en el árbol local."
+            )
+
+        # Sincronizar los comandos globales con Discord
+        try:
+            synced = await self.tree.sync()
+
+            print(
+                f"[ROOTGHOST] {len(synced)} "
+                "comandos sincronizados."
+            )
+
+            encontrados_discord = [
+                comando.name
+                for comando in synced
+                if comando.name.startswith("ia")
+            ]
+
+            if encontrados_discord:
+                for nombre in encontrados_discord:
+                    print(
+                        f"[ROOTGHOST] Comando IA "
+                        f"sincronizado: /{nombre}"
+                    )
+            else:
+                print(
+                    "[ROOTGHOST] AVISO: Discord no devolvió "
+                    "comandos cuyo nombre empiece por 'ia'."
+                )
+
+        except Exception as error:
+            print(
+                "[ROOTGHOST] Error al sincronizar: "
+                f"{type(error).__name__}: {error}"
+            )
+
+    # ======================================
+    # EVENTO DE CONEXIÓN
+    # ======================================
 
     async def on_ready(self):
-        print(f"[ROOTGHOST] Conectado como {self.user}")
+        print("=" * 45)
+        print(f"[ROOTGHOST] Conectado como: {self.user}")
+        print(f"[ROOTGHOST] ID del bot: {self.user.id}")
+        print(
+            f"[ROOTGHOST] Servidores conectados: "
+            f"{len(self.guilds)}"
+        )
+        print("=" * 45)
 
 
-bot = RootGhost()
+# ==========================================
+# INICIAR ROOTGHOST
+# ==========================================
 
-
-@bot.tree.command(
-    name="hola",
-    description="Saluda desde ROOTGHOST"
-)
-async def hola(interaction: discord.Interaction):
-    await interaction.response.send_message(
-        f"ROOTGHOST está activo, {interaction.user.mention}."
-    )
-
-
-@bot.tree.command(
-    name="ping",
-    description="Comprueba la latencia"
-)
-async def ping(interaction: discord.Interaction):
-    await interaction.response.send_message(
-        f"ROOTGHOST | Latencia: {round(bot.latency * 1000)} ms"
-    )
-
+TOKEN = os.getenv("DISCORD_TOKEN")
 
 if not TOKEN:
-    raise RuntimeError("Falta configurar DISCORD_TOKEN")
+    raise RuntimeError(
+        "Falta DISCORD_TOKEN. Configurá el token "
+        "como variable de entorno en Termux."
+    )
 
-
+bot = RootGhost()
 bot.run(TOKEN)
