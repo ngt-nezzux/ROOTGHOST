@@ -9,7 +9,7 @@ def load():
  except (FileNotFoundError,json.JSONDecodeError):return {}
 class Leaderboard(commands.Cog):
  def __init__(self,bot):self.bot=bot
- @app_commands.command(name='leaderboard',description='Mostrar ranking de experiencia del servidor')
+ @app_commands.command(name='leaderboard-xp', description='Mostrar ranking de experiencia del servidor')
  @app_commands.guild_only()
  async def leaderboard(self,i:discord.Interaction):
   users=load().get(str(i.guild_id),{});ranked=sorted(users.items(),key=lambda x:x[1].get('xp',0),reverse=True)[:10];lines=[]
